@@ -1209,6 +1209,9 @@ void FunctionCompiler::compileVectorExtMul(LLVM::Type FromTy, bool Signed,
   auto ExtTy = FromTy.getExtendedElementVectorType();
   const auto Count = FromTy.getVectorSize();
   std::vector<uint32_t> Mask(Count / 2);
+  if constexpr (Endian::native == Endian::big) {
+    Low = !Low;
+  }
   std::iota(Mask.begin(), Mask.end(), Low ? 0 : Count / 2);
   auto Extend = [this, FromTy, Signed, ExtTy, &Mask](LLVM::Value R) noexcept {
     R = Builder.createBitCast(R, FromTy);
@@ -1395,7 +1398,11 @@ void FunctionCompiler::compileVectorPromote() noexcept {
   compileVectorOp(Context.Floatx4Ty, [this](auto V) noexcept {
     auto UndefV = LLVM::Value::getUndef(V.getType());
     auto Low = Builder.createShuffleVector(
-        V, UndefV, LLVM::Value::getConstVector32(LLContext, {0u, 1u}));
+        V, UndefV,
+        LLVM::Value::getConstVector32(
+            LLContext, Endian::native == Endian::little
+                           ? std::vector<uint32_t>{0u, 1u}
+                           : std::vector<uint32_t>{2u, 3u}));
     return Builder.createFPExt(Low,
                                LLVM::Type::getVectorType(Context.DoubleTy, 2));
   });
